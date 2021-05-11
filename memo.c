@@ -29,49 +29,15 @@ void alarm_thread(void* ptr);
 void add_memo(Node* head, Memo data);
 void modify_memo(Node* head, int index, Memo data);
 void delete_memo(Node* head, int index);
+void delete_all_memo(Node* head);
 int count_memo(Node* head);
 void print_memo(Memo memo);
 void print_all_memo(Node* head);
 void set_memo(Memo* memo, int year1, int month1, int day1, int hour1, int min1, char* contents,
 	int year2, int month2, int day2, int hour2, int min2);
+void save_memo(Node* head, char* filename);
+void load_memo(Node* head, char* filename);
 time_t get_left_time(DateTime dtime);
-
-void alarm_thread(void* head)
-{
-	while (1)
-	{
-		Node* curr = ((Node*)head)->next;
-		while (curr != NULL)
-		{
-			DateTime alarm_time = curr->data.alarm_time;
-			time_t left_time = get_left_time(alarm_time);
-			if (left_time == 10)
-			{
-				printf("\n다음 일정이 10초 남았습니다!! : %s\n", curr->data.contents);
-			}
-
-			curr = curr->next;
-			_sleep(300);
-		}
-	}
-}
-
-time_t get_left_time(DateTime dtime)
-{
-	struct tm fix_time;
-
-	fix_time.tm_year = dtime.year - 1900;
-	fix_time.tm_mon = dtime.month - 1;
-	fix_time.tm_mday = dtime.day;
-	fix_time.tm_hour = dtime.hour;
-	fix_time.tm_min = dtime.min;
-	fix_time.tm_sec = 0;
-	fix_time.tm_isdst = 0;
-
-	time_t utc_time = mktime(&fix_time);
-
-	return utc_time - time(NULL);
-}
 
 int main()
 {
@@ -95,7 +61,7 @@ int main()
 
 	while (1)
 	{
-		printf("\n메모입력(1), 메모삭제(2), 메모수정(3), 메모확인(4) 프로그램 종료(5) 입력 : ");
+		printf("\n메모입력(1), 메모삭제(2), 메모수정(3), 메모확인(4) 메모저장(5) 메모불러오기(6) 프로그램 종료(7) 입력 : ");
 		scanf("%d", &select);
 
 		if (select == 1)
@@ -129,15 +95,13 @@ int main()
 				continue;
 			}
 
-			while (1)
-			{
-				printf("삭제할 메모번호를 입력해주세요 : ");
-				scanf("%d", &memo_num);
+			printf("삭제할 메모번호를 입력해주세요 : ");
+			scanf("%d", &memo_num);
 
-				if ((memo_num < 1) || (memo_num > memo_count))
-					printf("범위에 맞는 메모번호를 입력해주세요!\n");
-				else
-					break;
+			if ((memo_num < 1) || (memo_num > memo_count))
+			{
+				printf("범위에 맞는 메모번호를 입력해주세요!\n");
+				continue;
 			}
 
 			delete_memo(memo_head, memo_num);
@@ -189,13 +153,18 @@ int main()
 
 		else if (select == 5)
 		{
-			printf("프로그램을 종료합니다.\n");
-			break;
+			save_memo(memo_head, "memo_data.bin");
 		}
-
 		else if (select == 6)
 		{
-			alarm_thread(memo_head);
+			delete_all_memo(memo_head);
+			load_memo(memo_head, "memo_data.bin");
+		}
+
+		else if (select == 7)
+		{
+			printf("프로그램을 종료합니다.\n");
+			break;
 		}
 
 		else
@@ -216,6 +185,93 @@ int main()
 
 
 	return 0;
+}
+
+// 쓰레드 함수관련
+void alarm_thread(void* head)
+{
+	while (1)
+	{
+		Node* curr = ((Node*)head)->next;
+		while (curr != NULL)
+		{
+			DateTime alarm_time = curr->data.alarm_time;
+			time_t left_time = get_left_time(alarm_time);
+			if (left_time == 10)
+			{
+				printf("\n다음 일정이 10초 남았습니다!! : %s\n", curr->data.contents);
+			}
+
+			curr = curr->next;
+		}
+		_sleep(300);
+	}
+}
+
+time_t get_left_time(DateTime dtime)
+{
+	struct tm fix_time;
+
+	fix_time.tm_year = dtime.year - 1900;
+	fix_time.tm_mon = dtime.month - 1;
+	fix_time.tm_mday = dtime.day;
+	fix_time.tm_hour = dtime.hour;
+	fix_time.tm_min = dtime.min;
+	fix_time.tm_sec = 0;
+	fix_time.tm_isdst = 0;
+
+	time_t utc_time = mktime(&fix_time);
+
+	return utc_time - time(NULL);
+}
+
+// 메모 저장 및 불러오기 관련
+void save_memo(Node* head, char* filename)
+{
+	FILE* fp = fopen(filename, "wb");
+	Node* curr = head->next;
+
+	while (curr != NULL)
+	{
+		fwrite(&(curr->data), sizeof(Memo), 1, fp);
+		curr = curr->next;
+	}
+
+	fclose(fp);
+}
+
+void load_memo(Node* head, char* filename)
+{
+	FILE* fp = fopen(filename, "rb");
+	Memo temp_memo;
+	int fread_return;
+
+	while (1)
+	{
+		fread_return = fread(&temp_memo, sizeof(Memo), 1, fp);
+		if (fread_return == 0)
+			break;
+		add_memo(head, temp_memo);
+	}
+	fclose(fp);
+}
+
+
+// 메모 및 연결리스트 함수 관련
+void set_memo(Memo* memo, int year1, int month1, int day1, int hour1, int min1, char* contents,
+	int year2, int month2, int day2, int hour2, int min2)
+{
+	memo->created_time.year = year1;
+	memo->created_time.month = month1;
+	memo->created_time.day = day1;
+	memo->created_time.hour = hour1;
+	memo->created_time.min = min1;
+	strcpy(memo->contents, contents);
+	memo->alarm_time.year = year2;
+	memo->alarm_time.month = month2;
+	memo->alarm_time.day = day2;
+	memo->alarm_time.hour = hour2;
+	memo->alarm_time.min = min2;
 }
 
 void add_memo(Node* head, Memo data)
@@ -263,6 +319,18 @@ void delete_memo(Node* head, int index)
 	free(curr);
 }
 
+void delete_all_memo(Node* head)
+{
+	Node* curr = head->next;
+	while (curr != NULL)
+	{
+		Node* next = curr->next;
+		free(curr);
+		curr = next;
+	}
+	head->next = NULL;
+}
+
 int count_memo(Node* head)
 {
 	int count = 0;
@@ -277,10 +345,27 @@ int count_memo(Node* head)
 	return count;
 }
 
+// 메모출력함수 관련
+void print_memo(Memo memo)
+{
+	printf("만든시간 : %04d년 %02d월 %02d일 %02d시 %02d분, 메모내용 : %s, 알람시간 : %04d년 %02d월 %02d일 %02d시 %02d분\n",
+		memo.created_time.year, memo.created_time.month, memo.created_time.day,
+		memo.created_time.hour, memo.created_time.min,
+		memo.contents,
+		memo.alarm_time.year, memo.alarm_time.month, memo.alarm_time.day,
+		memo.alarm_time.hour, memo.alarm_time.min);
+}
+
 void print_all_memo(Node* head)
 {
 	int index = 1;
 	Node* curr = head->next;
+	
+	if (curr == NULL)
+	{
+		printf("저장된 메모가 없습니다.\n");
+		return;
+	}
 
 	while (curr != NULL)
 	{
@@ -291,28 +376,5 @@ void print_all_memo(Node* head)
 	
 }
 
-void set_memo(Memo* memo, int year1, int month1, int day1, int hour1, int min1, char* contents,
-	int year2, int month2, int day2, int hour2, int min2)
-{
-	memo->created_time.year = year1;
-	memo->created_time.month = month1;
-	memo->created_time.day = day1;
-	memo->created_time.hour = hour1;
-	memo->created_time.min = min1;
-	strcpy(memo->contents, contents);
-	memo->alarm_time.year = year2;
-	memo->alarm_time.month = month2;
-	memo->alarm_time.day = day2;
-	memo->alarm_time.hour = hour2;
-	memo->alarm_time.min = min2;
-}
 
-void print_memo(Memo memo)
-{
-	printf("만든시간 : %04d년 %02d월 %02d일 %02d시 %02d분, 메모내용 : %s, 알람시간 : %04d년 %02d월 %02d일 %02d시 %02d분\n",
-		memo.created_time.year, memo.created_time.month, memo.created_time.day,
-		memo.created_time.hour, memo.created_time.min,
-		memo.contents,
-		memo.alarm_time.year, memo.alarm_time.month, memo.alarm_time.day,
-		memo.alarm_time.hour, memo.alarm_time.min);
-}
+
