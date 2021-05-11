@@ -1,118 +1,294 @@
-#include <pthread.h>
+#define _CRT_SECURE_NO_WARNINGS
+#pragma warning(disable:4996)
 #include <stdio.h>
-#include <unistd.h>
 #include <stdlib.h>
 #include <time.h>
 #include <string.h>
+#include <process.h>
 
-typedef struct DateTime{
+typedef struct DateTime {
 	int year;
 	int month;
 	int day;
 	int hour;
 	int min;
 } DateTime;
- 
 
 typedef struct Memo {
 	DateTime created_time;
-	char contents[128];
+	char contents[256];
 	DateTime alarm_time;
 } Memo;
 
+typedef struct Node {
+	struct Node* next;
+	Memo data;
+} Node;
+
+void alarm_thread(void* ptr);
+void add_memo(Node* head, Memo data);
+void modify_memo(Node* head, int index, Memo data);
+void delete_memo(Node* head, int index);
+int count_memo(Node* head);
 void print_memo(Memo memo);
-void print_all_memo(Memo* memo, int max_index);
+void print_all_memo(Node* head);
 void set_memo(Memo* memo, int year1, int month1, int day1, int hour1, int min1, char* contents,
 	int year2, int month2, int day2, int hour2, int min2);
-	
-int max = 0;
+time_t get_left_time(DateTime dtime);
+
+void alarm_thread(void* head)
+{
+	while (1)
+	{
+		Node* curr = ((Node*)head)->next;
+		while (curr != NULL)
+		{
+			DateTime alarm_time = curr->data.alarm_time;
+			time_t left_time = get_left_time(alarm_time);
+			if (left_time == 10)
+			{
+				printf("\në‹¤ìŒ ì¼ì •ì´ 10ì´ˆ ë‚¨ì•˜ìŠµë‹ˆë‹¤!! : %s\n", curr->data.contents);
+			}
+
+			curr = curr->next;
+			_sleep(300);
+		}
+	}
+}
+
+time_t get_left_time(DateTime dtime)
+{
+	struct tm fix_time;
+
+	fix_time.tm_year = dtime.year - 1900;
+	fix_time.tm_mon = dtime.month - 1;
+	fix_time.tm_mday = dtime.day;
+	fix_time.tm_hour = dtime.hour;
+	fix_time.tm_min = dtime.min;
+	fix_time.tm_sec = 0;
+	fix_time.tm_isdst = 0;
+
+	time_t utc_time = mktime(&fix_time);
+
+	return utc_time - time(NULL);
+}
 
 int main()
 {
-	int select, memo_num;
+	int select, memo_num, memo_count;
 	int year, month, day, hour, min;
 	char temp_string[128];
+
 	struct tm* t;
 	time_t tnow = time(NULL);
+
+	Memo temp_memo;
+	Node* memo_head = (Node*)malloc(sizeof(Node));
+	Node* curr;
+	
 	t = (struct tm*)localtime(&tnow);
-	Memo* memo_data = (Memo*)malloc(sizeof(Memo));
-	
-	printf("¸Ş¸ğ °ü¸® ÇÁ·Î±×·¥ÀÔ´Ï´Ù.\n"); 
-	
-	
-	while(1)
+	memo_head->next = NULL;
+
+	printf("ë©”ëª¨ ê´€ë¦¬ í”„ë¡œê·¸ë¨ì…ë‹ˆë‹¤.\n");
+
+	_beginthread(alarm_thread, 0, (void*)memo_head);
+
+	while (1)
 	{
-		printf("\n¸Ş¸ğÀÔ·Â(1), ¸Ş¸ğ»èÁ¦(2), ¸Ş¸ğ¼öÁ¤(3), ¸Ş¸ğÈ®ÀÎ(4) ÇÁ·Î±×·¥ Á¾·á(5) ÀÔ·Â : ");
+		printf("\në©”ëª¨ì…ë ¥(1), ë©”ëª¨ì‚­ì œ(2), ë©”ëª¨ìˆ˜ì •(3), ë©”ëª¨í™•ì¸(4) í”„ë¡œê·¸ë¨ ì¢…ë£Œ(5) ì…ë ¥ : ");
 		scanf("%d", &select);
-		
-		if(select == 1)
+
+		if (select == 1)
 		{
-			printf("¸Ş¸ğ ³»¿ë ÀÔ·Â : ");
+			printf("ë©”ëª¨ ë‚´ìš© ì…ë ¥ : ");
 			scanf("%s", temp_string);
-			
-			printf("¾Ë¶÷³¯Â¥ ÀÔ·Â (³â ¿ù ÀÏ) : ");
+
+			printf("ì•ŒëŒë‚ ì§œ ì…ë ¥ (ë…„ ì›” ì¼) : ");
 			scanf("%d %d %d", &year, &month, &day);
-			
-			printf("¾Ë¶÷½Ã ÀÔ·Â (½Ã ºĞ) : ");
+
+			printf("ì•ŒëŒì‹œ ì…ë ¥ (ì‹œ ë¶„) : ");
 			scanf("%d %d", &hour, &min);
-			
+
 			tnow = time(NULL);
 			t = (struct tm*)localtime(&tnow);
-			
-			memo_data = (Memo*)realloc(memo_data, ++max * sizeof(Memo));
-			set_memo(&memo_data[max-1], (t->tm_year) + 1900, (t->tm_mon) + 1, t->tm_mday, t->tm_hour, t->tm_min,
+
+			set_memo(&temp_memo, (t->tm_year) + 1900, (t->tm_mon) + 1, t->tm_mday, t->tm_hour, t->tm_min,
 				temp_string, year, month, day, hour, min);
-			printf("%d¹ø ¸Ş¸ğ°¡ ÀÔ·ÂµÇ¾ú½À´Ï´Ù.\n", max); 
+
+			add_memo(memo_head, temp_memo);
+			printf("%dë²ˆ ë©”ëª¨ê°€ ì…ë ¥ë˜ì—ˆìŠµë‹ˆë‹¤.\n", count_memo(memo_head));
 		}
-		else if(select == 3)
+
+		else if (select == 2)
 		{
-			if(max == 0)
+			memo_count = count_memo(memo_head);
+
+			if (memo_count == 0)
 			{
-				printf("¼öÁ¤ÇÒ ¸Ş¸ğ°¡ ¾ø½À´Ï´Ù.\n");
+				printf("ì‚­ì œí•  ë©”ëª¨ê°€ ì—†ìŠµë‹ˆë‹¤.\n");
 				continue;
 			}
-			
-			while(1)
+
+			while (1)
 			{
-				printf("¼öÁ¤ÇÒ ¸Ş¸ğ¹øÈ£¸¦ ÀÔ·ÂÇØÁÖ¼¼¿ä : ");
+				printf("ì‚­ì œí•  ë©”ëª¨ë²ˆí˜¸ë¥¼ ì…ë ¥í•´ì£¼ì„¸ìš” : ");
 				scanf("%d", &memo_num);
-				
-				if( (memo_num < 1) || (memo_num > max) )
-					printf("¹üÀ§¿¡ ¸Â´Â ¸Ş¸ğ¹øÈ£¸¦ ÀÔ·ÂÇØÁÖ¼¼¿ä!\n");
+
+				if ((memo_num < 1) || (memo_num > memo_count))
+					printf("ë²”ìœ„ì— ë§ëŠ” ë©”ëª¨ë²ˆí˜¸ë¥¼ ì…ë ¥í•´ì£¼ì„¸ìš”!\n");
 				else
 					break;
 			}
-			
-			printf("¸Ş¸ğ ³»¿ë ÀÔ·Â : ");
-			scanf("%s", temp_string);
-			
-			printf("¾Ë¶÷³¯Â¥ ÀÔ·Â (³â ¿ù ÀÏ) : ");
-			scanf("%d %d %d", &year, &month, &day);
-			
-			printf("¾Ë¶÷½Ã ÀÔ·Â (½Ã ºĞ) : ");
-			scanf("%d %d", &hour, &min);
-			
-			tnow = time(NULL);
-			t = (struct tm*)localtime(&tnow);
-			set_memo(&memo_data[memo_num-1], (t->tm_year) + 1900, (t->tm_mon) + 1, t->tm_mday, t->tm_hour, t->tm_min,
-				temp_string, year, month, day, hour, min);
-			printf("%d¹ø ¸Ş¸ğ°¡ ¼öÁ¤µÇ¾ú½À´Ï´Ù.\n", memo_num); 
-		}
-		else if(select == 4)
-		{
-			print_all_memo(memo_data, max);
-		}
-		else if(select == 5)
-		{
-			printf("ÇÁ·Î±×·¥À» Á¾·áÇÕ´Ï´Ù.\n");
-			break; 
+
+			delete_memo(memo_head, memo_num);
+			printf("%dë²ˆ ë©”ëª¨ë¥¼ ì‚­ì œí–ˆìŠµë‹ˆë‹¤.\n", memo_num); 
 		}
 
+		else if (select == 3)
+		{
+			memo_count = count_memo(memo_head);
+
+			if (memo_count == 0)
+			{
+				printf("ìˆ˜ì •í•  ë©”ëª¨ê°€ ì—†ìŠµë‹ˆë‹¤.\n");
+				continue;
+			}
+
+			while (1)
+			{
+				printf("ìˆ˜ì •í•  ë©”ëª¨ë²ˆí˜¸ë¥¼ ì…ë ¥í•´ì£¼ì„¸ìš” : ");
+				scanf("%d", &memo_num);
+
+				if ((memo_num < 1) || (memo_num > memo_count))
+					printf("ë²”ìœ„ì— ë§ëŠ” ë©”ëª¨ë²ˆí˜¸ë¥¼ ì…ë ¥í•´ì£¼ì„¸ìš”!\n");
+				else
+					break;
+			}
+
+			printf("ë©”ëª¨ ë‚´ìš© ì…ë ¥ : ");
+			scanf("%s", temp_string);
+
+			printf("ì•ŒëŒë‚ ì§œ ì…ë ¥ (ë…„ ì›” ì¼) : ");
+			scanf("%d %d %d", &year, &month, &day);
+
+			printf("ì•ŒëŒì‹œ ì…ë ¥ (ì‹œ ë¶„) : ");
+			scanf("%d %d", &hour, &min);
+
+			tnow = time(NULL);
+			t = (struct tm*)localtime(&tnow);
+			set_memo(&temp_memo, (t->tm_year) + 1900, (t->tm_mon) + 1, t->tm_mday, t->tm_hour, t->tm_min,
+				temp_string, year, month, day, hour, min);
+			modify_memo(memo_head, memo_num, temp_memo);
+			printf("%dë²ˆ ë©”ëª¨ê°€ ìˆ˜ì •ë˜ì—ˆìŠµë‹ˆë‹¤.\n", memo_num);
+		}
+
+		else if (select == 4)
+		{
+			print_all_memo(memo_head);
+		}
+
+		else if (select == 5)
+		{
+			printf("í”„ë¡œê·¸ë¨ì„ ì¢…ë£Œí•©ë‹ˆë‹¤.\n");
+			break;
+		}
+
+		else if (select == 6)
+		{
+			alarm_thread(memo_head);
+		}
+
+		else
+		{
+			printf("ë²ˆí˜¸ì— ë§ê²Œ ì…ë ¥í•´ì£¼ì„¸ìš”.\n");
+			continue;
+		}
+	}
+
+	curr = memo_head->next;
+	while (curr != NULL)
+	{
+		Node* next = curr->next;
+		free(curr);
+		curr = next;
+	}
+	free(memo_head);
+
+
+	return 0;
+}
+
+void add_memo(Node* head, Memo data)
+{
+	Node* curr = head;
+	Node* new_node = (Node*)malloc(sizeof(Node));
+
+	new_node->data = data;
+	new_node->next = NULL;
+
+	while (curr->next != NULL)
+		curr = curr->next;
+
+	curr->next = new_node;
+}
+
+void modify_memo(Node* head, int index, Memo data)
+{
+	Node* curr = head->next;
+	int count = 1;
+
+	while (count < index)
+	{
+		curr = curr->next;
+		count++;
+	}
+
+	curr->data = data;
+}
+
+void delete_memo(Node* head, int index)
+{
+	Node* curr = head->next;
+	Node* prev = head;
+	int count = 1;
+
+	while (count < index)
+	{
+		prev = curr;
+		curr = curr->next;
+		count++;
+	}
+
+	prev->next = curr->next;
+	free(curr);
+}
+
+int count_memo(Node* head)
+{
+	int count = 0;
+	Node* curr = head->next;
+
+	while (curr != NULL)
+	{
+		count++;
+		curr = curr->next;
+	}
+
+	return count;
+}
+
+void print_all_memo(Node* head)
+{
+	int index = 1;
+	Node* curr = head->next;
+
+	while (curr != NULL)
+	{
+		printf("%dë²ˆ ë©”ëª¨ : ", index++);
+		print_memo(curr->data);
+		curr = curr->next;
 	}
 	
-	free(memo_data);
- 
-    return 0;
 }
 
 void set_memo(Memo* memo, int year1, int month1, int day1, int hour1, int min1, char* contents,
@@ -131,24 +307,12 @@ void set_memo(Memo* memo, int year1, int month1, int day1, int hour1, int min1, 
 	memo->alarm_time.min = min2;
 }
 
-void print_all_memo(Memo* memo, int max_index)
-{
-	int i;
-	printf("ÀúÀåµÈ ÀüÃ¼ ¸Ş¸ğÀÔ´Ï´Ù.\n");
-	for(i=0; i<max_index; i++)
-	{
-		printf("%d¹ø ¸Ş¸ğÀÔ´Ï´Ù. ", i+1);
-		print_memo(memo[i]);
-	}
-}
-
 void print_memo(Memo memo)
 {
-	printf("¸¸µç½Ã°£ : %04d³â %02d¿ù %02dÀÏ %02d½Ã %02dºĞ, ¸Ş¸ğ³»¿ë : %s, ¾Ë¶÷½Ã°£ : %04d³â %02d¿ù %02dÀÏ %02d½Ã %02dºĞ\n",
+	printf("ë§Œë“ ì‹œê°„ : %04dë…„ %02dì›” %02dì¼ %02dì‹œ %02dë¶„, ë©”ëª¨ë‚´ìš© : %s, ì•ŒëŒì‹œê°„ : %04dë…„ %02dì›” %02dì¼ %02dì‹œ %02dë¶„\n",
 		memo.created_time.year, memo.created_time.month, memo.created_time.day,
 		memo.created_time.hour, memo.created_time.min,
 		memo.contents,
 		memo.alarm_time.year, memo.alarm_time.month, memo.alarm_time.day,
 		memo.alarm_time.hour, memo.alarm_time.min);
 }
-
