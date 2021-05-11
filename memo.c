@@ -9,6 +9,7 @@
 #define True 1
 #define False 0
 
+// 만든 날짜 및 일정 날짜 저장용 구조체
 typedef struct DateTime {
 	int year;
 	int month;
@@ -17,12 +18,14 @@ typedef struct DateTime {
 	int min;
 } DateTime;
 
+// 메모 구조체(만든시간, 메모내용, 일정날짜 순)
 typedef struct Memo {
 	DateTime created_time;
 	char contents[256];
 	DateTime alarm_time;
 } Memo;
 
+// 연결리스트 노드
 typedef struct Node {
 	struct Node* next;
 	Memo data;
@@ -86,7 +89,7 @@ int main()
 			printf("알람시 입력 (시 분) : ");
 			scanf("%d %d", &hour, &min);
 
-			// 현재까지 지난 초(Time(NULL))을 localtime에 입력
+			// 현재까지 지난 초(Time(NULL))을 localtime에 입력하여 현재 년, 월, 일, 시, 분, 초 구함
 			tnow = time(NULL);
 			t = (struct tm*)localtime(&tnow);
 
@@ -171,14 +174,14 @@ int main()
 
 		else if (select == 5)
 		{
-			char* filename[128];
+			char filename[128];
 			printf("저장할 파일 이름을 입력해주세요 : ");
 			scanf("%s", filename);
 			save_memo(memo_head, filename);  // 메모저장
 		}
 		else if (select == 6)
 		{
-			char* filename[128];
+			char filename[128];
 			printf("불러올 파일 이름을 입력해주세요 : ");
 			scanf("%s", filename);
 			delete_all_memo(memo_head);  // 연결리스트 전체 삭제 후
@@ -223,7 +226,7 @@ void alarm_thread(void* head)  // 알람기능 쓰레드
 			DateTime alarm_time = curr->data.alarm_time;  // 알람시간
 			time_t left_time = get_left_time(alarm_time);  // 남은시간 계산
 			
-			// 남은시간 조건에 따라 알림
+			// 남은시간 조건에 따라 알람
 			if (left_time == 10)
 			{
 				printf("\n다음 일정이 10초 남았습니다!! : %s\n", curr->data.contents);
@@ -247,7 +250,7 @@ time_t get_left_time(DateTime dtime)  // DateTime 구조체를 받아 현재시�
 	fix_time.tm_hour = dtime.hour;
 	fix_time.tm_min = dtime.min;
 	fix_time.tm_sec = 0;
-	fix_time.tm_isdst = 0;
+	fix_time.tm_isdst = 0;  // 서머타임 X
 
 	// mktime을 이용해 utc_time 반환(현재까지 지난 초)
 	time_t utc_time = mktime(&fix_time);
